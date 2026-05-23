@@ -14,11 +14,23 @@
 <!--===================================================================================-->
 <!-- Inline style to avoid an extra round trip before the page can render. -->
 <style type="text/css">
+:root {
+  --bg: #0b0f14;
+  --panel: #0f1720;
+  --muted: #9aa6b2;
+  --text: #e6eef6;
+  --accent: #3aa0ff;
+  --input: #0b1116;
+  --border: #1f2a33;
+}
+
 * {
   box-sizing: border-box;
 }
 body {
   font-family: Arial, Helvetica, sans-serif;
+  background: var(--bg);
+  color: var(--text);
 }
 
 #chatlog {
@@ -30,9 +42,11 @@ body {
   overflow-y: auto;
   padding: 8px;
   overflow-wrap: break-word;
+  background: transparent;
 }
 #chatlog span.username {
   font-weight: bold;
+  color: var(--accent);
 }
 #spacer {
   height: calc(100vh - 32px - 5em);
@@ -41,11 +55,14 @@ body {
 #roster {
   font-weight: bold;
   padding: 8px;
+  background: var(--panel);
+  color: var(--muted);
 }
 
 p {
   margin-top: 0;
   margin-bottom: 8px;
+  color: var(--text);
 }
 p:last-of-type {
   margin: 0;
@@ -57,11 +74,15 @@ p:last-of-type {
   top: 0;
   bottom: 32px;
   width: 200px;
-  border-left: none;
+  border-left: 1px solid var(--border);
 }
 
 ::-webkit-scrollbar {
-  display: none;
+  width: 8px;
+}
+::-webkit-scrollbar-thumb {
+  background: #1b2230;
+  border-radius: 4px;
 }
 
 @media(max-width:600px) {
@@ -76,10 +97,13 @@ p:last-of-type {
   bottom: 0;
   left: 0;
   border: none;
-  border-top: none;
+  border-top: 1px solid var(--border);
   padding-left: 32px;
   outline: none;
+  background: var(--input);
+  color: var(--text);
 }
+#chat-input::placeholder { color: #6f7b85; }
 #chatroom::before {
   z-index: 1;
   display: block;
@@ -92,7 +116,7 @@ p:last-of-type {
   line-height: 32px;
   text-align: center;
   font-weight: bold;
-  color: #888;
+  color: #7f8c95;
   -webkit-text-stroke-width: 2px;
 }
 
@@ -103,7 +127,7 @@ p:last-of-type {
   bottom: 0;
   left: 0;
   right: 0;
-  background-color: white;
+  background-color: rgba(11,15,20,0.95);
 }
 
 #name-input {
@@ -115,7 +139,9 @@ p:last-of-type {
   height: 2em;
   margin: 0;
   text-align: center;
-  border: 1px solid #bbb;
+  border: 1px solid var(--border);
+  background: var(--input);
+  color: var(--text);
 }
 
 #name-form p {
@@ -123,6 +149,7 @@ p:last-of-type {
   top: calc(50% + 3em);
   width: 100%;
   text-align: center;
+  color: var(--muted);
 }
 
 #room-form {
@@ -132,7 +159,7 @@ p:last-of-type {
   bottom: 0;
   left: 0;
   right: 0;
-  background-color: white;
+  background-color: rgba(11,15,20,0.95);
   font-size: 200%;
   margin-top: calc(50vh - 3em);
   text-align: center;
@@ -140,16 +167,19 @@ p:last-of-type {
 
 #room-name {
   font-size: inherit;
-  border: 1px solid #bbb;
+  border: 1px solid var(--border);
   height: 2em;
   width: 16em;
   padding-left: 1em;
+  background: var(--input);
+  color: var(--text);
 }
 
 #room-form button {
   font-size: inherit;
-  border: 1px solid #bbb;
-  background-color: #eee;
+  border: 1px solid var(--border);
+  background-color: #0e1418;
+  color: var(--text);
   height: 2em;
 }
 
@@ -162,11 +192,61 @@ p:last-of-type {
   #name-form p { font-size: 50%; }
 }
 
-#go-public {
-  width: 4em;
+#go-public { width: 4em; }
+#go-private { width: 20em; }
+
+a { color: var(--accent); }
+
+.copy-btn {
+  background: transparent;
+  border: none;
+  padding: 2px;
+  margin-left: 8px;
+  vertical-align: middle;
+  cursor: pointer;
+  color: var(--muted);
 }
-#go-private {
-  width: 20em;
+.copy-btn:hover { color: var(--accent); }
+
+#copy-overlay {
+  position: fixed;
+  left: 0;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0,0,0,0.6);
+  z-index: 10000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.copy-modal {
+  background: var(--panel);
+  color: var(--text);
+  padding: 24px 16px 16px;
+  border-radius: 6px;
+  width: 90%;
+  max-width: 480px;
+  position: relative;
+  border: 1px solid var(--border);
+}
+.copy-close {
+  position: absolute;
+  right: 12px;
+  top: 12px;
+  background: transparent;
+  border: none;
+  color: var(--muted);
+  font-size: 18px;
+  cursor: pointer;
+}
+.copy-input {
+  width: 100%;
+  padding: 8px;
+  margin-top: 16px;
+  background: var(--input);
+  border: 1px solid var(--border);
+  color: var(--text);
 }
 
 </style>
@@ -176,18 +256,18 @@ p:last-of-type {
 
   </head>
   <body>
-    <form id="name-form" action="/fake-form-action">
+    <form id="name-form" action="#" onsubmit="return false;">
       <input id="name-input" placeholder="your name">
       <p>This chat runs entirely on the edge, powered by<br>
         <a href="https://blog.cloudflare.com/introducing-workers-durable-objects" target="_blank">Cloudflare Workers Durable Objects</a></p>
     </form>
-    <form id="room-form" action="/fake-form-action">
+    <form id="room-form" action="#" onsubmit="return false;">
       <p>Enter a public room:</p>
       <input id="room-name" placeholder="room name"><button id="go-public">Go &raquo;</button>
       <p>OR</p>
       <button id="go-private">Create a Private Room &raquo;</button>
     </form>
-    <form id="chatroom" action="/fake-form-action">
+    <form id="chatroom" action="#" onsubmit="return false;">
       <div id="chatlog">
         <div id="spacer"></div>
       </div>
@@ -198,35 +278,34 @@ p:last-of-type {
 
 <!--===================================================================================-->
 <!-- Client-side JavaScript code for the app. -->
-
 <script type="text/javascript">
-let currentWebSocket = null;
+var currentWebSocket = null;
 
-let nameForm = document.querySelector("#name-form");
-let nameInput = document.querySelector("#name-input");
-let roomForm = document.querySelector("#room-form");
-let roomNameInput = document.querySelector("#room-name");
-let goPublicButton = document.querySelector("#go-public");
-let goPrivateButton = document.querySelector("#go-private");
-let chatroom = document.querySelector("#chatroom");
-let chatlog = document.querySelector("#chatlog");
-let chatInput = document.querySelector("#chat-input");
-let roster = document.querySelector("#roster");
+var nameForm = document.querySelector("#name-form");
+var nameInput = document.querySelector("#name-input");
+var roomForm = document.querySelector("#room-form");
+var roomNameInput = document.querySelector("#room-name");
+var goPublicButton = document.querySelector("#go-public");
+var goPrivateButton = document.querySelector("#go-private");
+var chatroom = document.querySelector("#chatroom");
+var chatlog = document.querySelector("#chatlog");
+var chatInput = document.querySelector("#chat-input");
+var roster = document.querySelector("#roster");
 
 // Is the chatlog scrolled to the bottom?
-let isAtBottom = true;
+var isAtBottom = true;
 
-let username;
-let roomname;
+var username;
+var roomname;
 
-let hostname = window.location.host;
+var hostname = window.location.host;
 if (hostname == "") {
   // Probably testing the HTML locally.
   hostname = "edge-chat-demo.cloudflareworkers.com";
 }
 
 function startNameChooser() {
-  nameForm.addEventListener("submit", event => {
+  nameForm.addEventListener("submit", function(event) {
     event.preventDefault();
     username = nameInput.value;
     if (username.length > 0) {
@@ -234,7 +313,7 @@ function startNameChooser() {
     }
   });
 
-  nameInput.addEventListener("input", event => {
+  nameInput.addEventListener("input", function(event) {
     if (event.currentTarget.value.length > 32) {
       event.currentTarget.value = event.currentTarget.value.slice(0, 32);
     }
@@ -244,7 +323,7 @@ function startNameChooser() {
 }
 
 function startRoomChooser() {
-  nameForm.remove();
+  if (nameForm && nameForm.parentNode) nameForm.parentNode.removeChild(nameForm);
 
   if (document.location.hash.length > 1) {
     roomname = document.location.hash.slice(1);
@@ -252,7 +331,7 @@ function startRoomChooser() {
     return;
   }
 
-  roomForm.addEventListener("submit", event => {
+  roomForm.addEventListener("submit", function(event) {
     event.preventDefault();
     roomname = roomNameInput.value;
     if (roomname.length > 0) {
@@ -260,40 +339,50 @@ function startRoomChooser() {
     }
   });
 
-  roomNameInput.addEventListener("input", event => {
+  roomNameInput.addEventListener("input", function(event) {
     if (event.currentTarget.value.length > 32) {
       event.currentTarget.value = event.currentTarget.value.slice(0, 32);
     }
   });
 
-  goPublicButton.addEventListener("click", event => {
+  goPublicButton.addEventListener("click", function(event) {
     roomname = roomNameInput.value;
     if (roomname.length > 0) {
       startChat();
     }
   });
 
-  goPrivateButton.addEventListener("click", async event => {
+  goPrivateButton.addEventListener("click", function(event) {
     roomNameInput.disabled = true;
     goPublicButton.disabled = true;
     event.currentTarget.disabled = true;
 
-    let response = await fetch("https://" + hostname + "/api/room", {method: "POST"});
-    if (!response.ok) {
-      alert("something went wrong");
-      document.location.reload();
-      return;
-    }
-
-    roomname = await response.text();
-    startChat();
+    fetch("https://" + hostname + "/api/room", {method: "POST"})
+      .then(function(response) {
+        if (!response.ok) {
+          alert("something went wrong");
+          document.location.reload();
+          return;
+        }
+        return response.text();
+      })
+      .then(function(text) {
+        if (text) {
+          roomname = text;
+          startChat();
+        }
+      })
+      .catch(function() {
+        alert("something went wrong");
+        document.location.reload();
+      });
   });
 
   roomNameInput.focus();
 }
 
 function startChat() {
-  roomForm.remove();
+  if (roomForm && roomForm.parentNode) roomForm.parentNode.removeChild(roomForm);
 
   // Normalize the room name a bit.
   roomname = roomname.replace(/[^a-zA-Z0-9_-]/g, "").replace(/_/g, "-").toLowerCase();
@@ -305,7 +394,7 @@ function startChat() {
 
   document.location.hash = "#" + roomname;
 
-  chatInput.addEventListener("keydown", event => {
+  chatInput.addEventListener("keydown", function(event) {
     if (event.keyCode == 38) {
       // up arrow
       chatlog.scrollBy(0, -50);
@@ -321,7 +410,7 @@ function startChat() {
     }
   });
 
-  chatroom.addEventListener("submit", event => {
+  chatroom.addEventListener("submit", function(event) {
     event.preventDefault();
 
     if (currentWebSocket) {
@@ -333,18 +422,18 @@ function startChat() {
     }
   });
 
-  chatInput.addEventListener("input", event => {
+  chatInput.addEventListener("input", function(event) {
     if (event.currentTarget.value.length > 256) {
       event.currentTarget.value = event.currentTarget.value.slice(0, 256);
     }
   });
 
-  chatlog.addEventListener("scroll", event => {
+  chatlog.addEventListener("scroll", function(event) {
     isAtBottom = chatlog.scrollTop + chatlog.clientHeight >= chatlog.scrollHeight;
   });
 
   chatInput.focus();
-  document.body.addEventListener("click", event => {
+  document.body.addEventListener("click", function(event) {
     // If the user clicked somewhere in the window without selecting any text, focus the chat
     // input.
     if (window.getSelection().toString() == "") {
@@ -364,17 +453,17 @@ function startChat() {
   join();
 }
 
-let lastSeenTimestamp = 0;
-let wroteWelcomeMessages = false;
+var lastSeenTimestamp = 0;
+var wroteWelcomeMessages = false;
 
 function join() {
   // If we are running via wrangler dev, use ws:
-  const wss = document.location.protocol === "http:" ? "ws://" : "wss://";
-  let ws = new WebSocket(wss + hostname + "/api/room/" + roomname + "/websocket");
-  let rejoined = false;
-  let startTime = Date.now();
+  var wss = document.location.protocol === "http:" ? "ws://" : "wss://";
+  var ws = new WebSocket(wss + hostname + "/api/room/" + roomname + "/websocket");
+  var rejoined = false;
+  var startTime = Date.now();
 
-  let rejoin = async () => {
+  function rejoin() {
     if (!rejoined) {
       rejoined = true;
       currentWebSocket = null;
@@ -385,35 +474,37 @@ function join() {
       }
 
       // Don't try to reconnect too rapidly.
-      let timeSinceLastJoin = Date.now() - startTime;
+      var timeSinceLastJoin = Date.now() - startTime;
       if (timeSinceLastJoin < 10000) {
         // Less than 10 seconds elapsed since last join. Pause a bit.
-        await new Promise(resolve => setTimeout(resolve, 10000 - timeSinceLastJoin));
+        setTimeout(function() { join(); }, 10000 - timeSinceLastJoin);
+      } else {
+        // OK, reconnect now!
+        join();
       }
-
-      // OK, reconnect now!
-      join();
     }
   }
 
-  ws.addEventListener("open", event => {
+  ws.addEventListener("open", function(event) {
     currentWebSocket = ws;
 
     // Send user info message.
     ws.send(JSON.stringify({name: username}));
   });
 
-  ws.addEventListener("message", event => {
-    let data = JSON.parse(event.data);
+  ws.addEventListener("message", function(event) {
+    var data = JSON.parse(event.data);
 
     if (data.error) {
       addChatMessage(null, "* Error: " + data.error);
     } else if (data.joined) {
-      let p = document.createElement("p");
+      var p = document.createElement("p");
       p.innerText = data.joined;
       roster.appendChild(p);
     } else if (data.quit) {
-      for (let child of roster.childNodes) {
+      var i;
+      for (i = 0; i < roster.childNodes.length; i++) {
+        var child = roster.childNodes[i];
         if (child.innerText == data.quit) {
           roster.removeChild(child);
           break;
@@ -423,19 +514,13 @@ function join() {
       // All pre-join messages have been delivered.
       if (!wroteWelcomeMessages) {
         wroteWelcomeMessages = true;
-        addChatMessage(null,
-            "* This is a demo app built with Cloudflare Workers Durable Objects. The source code " +
-            "can be found at: https://github.com/cloudflare/workers-chat-demo");
-        addChatMessage(null,
-            "* WARNING: Participants in this chat are random people on the internet. " +
-            "Names are not authenticated; anyone can pretend to be anyone. The people " +
-            "you are chatting with are NOT Cloudflare employees. Chat history is saved.");
+        // Welcome messages intentionally left commented out in localized build.
         if (roomname.length == 64) {
           addChatMessage(null,
-              "* This is a private room. You can invite someone to the room by sending them the URL.");
+              "* 这是一个一个私人房间，你可以发送这个链接给朋友来邀请他们加入： " + document.location.href);
         } else {
           addChatMessage(null,
-              "* Welcome to #" + roomname + ". Say hi!");
+              "* 欢迎来到杰哥聊 房间：#" + roomname + ". Say hi!");
         }
       }
     } else {
@@ -447,32 +532,89 @@ function join() {
     }
   });
 
-  ws.addEventListener("close", event => {
+  ws.addEventListener("close", function(event) {
     console.log("WebSocket closed, reconnecting:", event.code, event.reason);
     rejoin();
   });
-  ws.addEventListener("error", event => {
+  ws.addEventListener("error", function(event) {
     console.log("WebSocket error, reconnecting:", event);
     rejoin();
   });
 }
 
 function addChatMessage(name, text) {
-  let p = document.createElement("p");
+  var p = document.createElement("p");
   if (name) {
-    let tag = document.createElement("span");
+    var tag = document.createElement("span");
     tag.className = "username";
     tag.innerText = name + ": ";
     p.appendChild(tag);
   }
   p.appendChild(document.createTextNode(text));
 
+  // Add copy button with hard-coded SVG
+  var btn = document.createElement("button");
+  btn.type = 'button';
+  btn.className = "copy-btn";
+  btn.setAttribute("aria-label", "copy message");
+  btn.innerHTML = '<svg width="16" height="16" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg" aria-hidden="true"><path fill="currentColor" d="M16 2H8a2 2 0 0 0-2 2v1H6a2 2 0 0 0-2 2v11a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V7a2 2 0 0 0-2-2h-.0V4a2 2 0 0 0-2-2z"/></svg>';
+  btn.addEventListener('click', function(e) {
+    e.preventDefault();
+    e.stopPropagation();
+    showCopyModal(text);
+  });
+
+  p.appendChild(btn);
+
   // Append the new chat line, making sure that if the chatlog was scrolled to the bottom
   // before, it remains scrolled to the bottom, and otherwise the scroll position doesn't
   // change.
   chatlog.appendChild(p);
   if (isAtBottom) {
-    chatlog.scrollBy(0, 1e8);
+    try { chatlog.scrollBy(0, 1e8); } catch (e) { chatlog.scrollTop = chatlog.scrollHeight; }
+  }
+}
+
+function showCopyModal(message) {
+  // Create overlay
+  var overlay = document.createElement('div');
+  overlay.id = 'copy-overlay';
+  overlay.addEventListener('click', function() { close(); });
+
+  // Modal
+  var modal = document.createElement('div');
+  modal.className = 'copy-modal';
+  modal.addEventListener('click', function(e) { e.stopPropagation(); });
+
+  // Close button
+  var closeBtn = document.createElement('button');
+  closeBtn.type = 'button';
+  closeBtn.className = 'copy-close';
+  closeBtn.innerHTML = '✕';
+  closeBtn.addEventListener('click', function() { close(); });
+  modal.appendChild(closeBtn);
+
+  // Input
+  var input = document.createElement('input');
+  input.className = 'copy-input';
+  input.type = 'text';
+  input.value = message;
+  input.readOnly = true;
+  modal.appendChild(input);
+
+  overlay.appendChild(modal);
+  document.body.appendChild(overlay);
+
+  // Focus and select text so user can copy
+  setTimeout(function() {
+    try {
+      input.focus();
+      input.setSelectionRange(0, input.value.length);
+    } catch (e) {}
+  }, 50);
+
+  function close() {
+    if (overlay && overlay.parentNode) overlay.parentNode.removeChild(overlay);
   }
 }
 
