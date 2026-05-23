@@ -10,7 +10,7 @@ The reason this demo is remarkable is because it deals with state. Before Durabl
 
 - make it more modern
 - add encryption
-- dark mode
+- dark mode  
 ** I used AI agent to develop this **
 
 ## How does it work?
