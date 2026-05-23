@@ -98,27 +98,51 @@ p:last-of-type {
   left: 0;
   border: none;
   border-top: 1px solid var(--border);
-  padding-left: 32px;
+  padding-left: 40px;
   outline: none;
   background: var(--input);
   color: var(--text);
 }
 #chat-input::placeholder { color: #6f7b85; }
 #chatroom::before {
-  z-index: 1;
-  display: block;
-  content: ">";
+  display: none;
+}
+.encrypt-btn {
   position: fixed;
   bottom: 0;
   left: 0;
   width: 32px;
   height: 32px;
-  line-height: 32px;
-  text-align: center;
-  font-weight: bold;
-  color: #7f8c95;
-  -webkit-text-stroke-width: 2px;
+  border: none;
+  background: transparent;
+  color: var(--muted);
+  cursor: pointer;
+  padding: 0;
+  z-index: 2;
 }
+.encrypt-btn:hover {
+  color: var(--accent);
+}
+.copy-btn {
+  background: transparent;
+  border: none;
+  padding: 2px;
+  margin-left: 8px;
+  vertical-align: middle;
+  cursor: pointer;
+  color: var(--muted);
+}
+.copy-btn:hover { color: var(--accent); }
+.decrypt-btn {
+  background: transparent;
+  border: none;
+  padding: 2px;
+  margin-left: 8px;
+  vertical-align: middle;
+  cursor: pointer;
+  color: var(--muted);
+}
+.decrypt-btn:hover { color: var(--accent); }
 
 #name-form {
   position: fixed;
@@ -208,7 +232,8 @@ a { color: var(--accent); }
 }
 .copy-btn:hover { color: var(--accent); }
 
-#copy-overlay {
+#copy-overlay,
+#password-overlay {
   position: fixed;
   left: 0;
   top: 0;
@@ -272,6 +297,7 @@ a { color: var(--accent); }
         <div id="spacer"></div>
       </div>
       <div id="roster"></div>
+      <button id="encrypt-button" type="button" class="encrypt-btn" aria-label="encrypt message"><svg width="16" height="16" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg" aria-hidden="true"><path fill="currentColor" d="M17 8V7a5 5 0 0 0-10 0v1H5a2 2 0 0 0-2 2v9a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-9a2 2 0 0 0-2-2h-2zm-8-1a3 3 0 0 1 6 0v1H9V7zm10 12H5v-9h14v9z"/></svg></button>
       <input id="chat-input">
     </form>
   </body>
@@ -290,6 +316,7 @@ var goPrivateButton = document.querySelector("#go-private");
 var chatroom = document.querySelector("#chatroom");
 var chatlog = document.querySelector("#chatlog");
 var chatInput = document.querySelector("#chat-input");
+var encryptButton = document.querySelector("#encrypt-button");
 var roster = document.querySelector("#roster");
 
 // Is the chatlog scrolled to the bottom?
@@ -410,6 +437,14 @@ function startChat() {
     }
   });
 
+  if (encryptButton) {
+    encryptButton.addEventListener("click", function(event) {
+      event.preventDefault();
+      event.stopPropagation();
+      showEncryptModal();
+    });
+  }
+
   chatroom.addEventListener("submit", function(event) {
     event.preventDefault();
 
@@ -423,8 +458,8 @@ function startChat() {
   });
 
   chatInput.addEventListener("input", function(event) {
-    if (event.currentTarget.value.length > 256) {
-      event.currentTarget.value = event.currentTarget.value.slice(0, 256);
+    if (event.currentTarget.value.length > 1024) {
+      event.currentTarget.value = event.currentTarget.value.slice(0, 1024);
     }
   });
 
@@ -451,6 +486,360 @@ function startChat() {
   }
 
   join();
+}
+
+var passwordDbPromise = null;
+function openPasswordDb() {
+  if (passwordDbPromise) {
+    return passwordDbPromise;
+  }
+  passwordDbPromise = new Promise(function(resolve, reject) {
+    var request = indexedDB.open('chat-passwords', 1);
+    request.onupgradeneeded = function(event) {
+      var db = event.target.result;
+      if (!db.objectStoreNames.contains('passwords')) {
+        db.createObjectStore('passwords', {keyPath: 'id'});
+      }
+    };
+    request.onsuccess = function(event) {
+      resolve(event.target.result);
+    };
+    request.onerror = function(event) {
+      reject(event.target.error || new Error('IndexedDB open failed'));
+    };
+  });
+  return passwordDbPromise;
+}
+
+function savePassword(key, password) {
+  return openPasswordDb().then(function(db) {
+    var tx = db.transaction('passwords', 'readwrite');
+    var store = tx.objectStore('passwords');
+    store.put({id: key, value: password});
+    return new Promise(function(resolve, reject) {
+      tx.oncomplete = function() { resolve(); };
+      tx.onerror = function() { reject(tx.error || new Error('IndexedDB save failed')); };
+    });
+  });
+}
+
+function getSavedPassword(key) {
+  return openPasswordDb().then(function(db) {
+    var tx = db.transaction('passwords', 'readonly');
+    var store = tx.objectStore('passwords');
+    var request = store.get(key);
+    return new Promise(function(resolve, reject) {
+      request.onsuccess = function() { resolve(request.result ? request.result.value : ''); };
+      request.onerror = function() { reject(request.error || new Error('IndexedDB read failed')); };
+    });
+  });
+}
+
+function utf8Encode(text) {
+  return new TextEncoder().encode(text);
+}
+
+function utf8Decode(bytes) {
+  return new TextDecoder().decode(bytes);
+}
+
+function base64Encode(buffer) {
+  var bytes = new Uint8Array(buffer);
+  var binary = '';
+  for (var i = 0; i < bytes.length; i++) {
+    binary += String.fromCharCode(bytes[i]);
+  }
+  return btoa(binary);
+}
+
+function base64Decode(base64) {
+  var binary = atob(base64);
+  var bytes = new Uint8Array(binary.length);
+  for (var i = 0; i < binary.length; i++) {
+    bytes[i] = binary.charCodeAt(i);
+  }
+  return bytes;
+}
+
+function deriveAesKey(password, salt) {
+  return crypto.subtle.importKey(
+    'raw',
+    utf8Encode(password),
+    {name: 'PBKDF2'},
+    false,
+    ['deriveKey']
+  ).then(function(baseKey) {
+    return crypto.subtle.deriveKey(
+      {
+        name: 'PBKDF2',
+        salt: salt,
+        iterations: 100000,
+        hash: 'SHA-256'
+      },
+      baseKey,
+      {name: 'AES-GCM', length: 256},
+      false,
+      ['encrypt', 'decrypt']
+    );
+  });
+}
+
+function encryptText(message, password) {
+  var salt = crypto.getRandomValues(new Uint8Array(16));
+  var iv = crypto.getRandomValues(new Uint8Array(12));
+  return deriveAesKey(password, salt).then(function(key) {
+    return crypto.subtle.encrypt(
+      {name: 'AES-GCM', iv: iv},
+      key,
+      utf8Encode(message)
+    ).then(function(ciphertext) {
+      var data = new Uint8Array(salt.length + iv.length + ciphertext.byteLength);
+      data.set(salt, 0);
+      data.set(iv, salt.length);
+      data.set(new Uint8Array(ciphertext), salt.length + iv.length);
+      return base64Encode(data.buffer);
+    });
+  });
+}
+
+function decryptText(encoded, password) {
+  var data = base64Decode(encoded);
+  if (data.length < 28) {
+    return Promise.reject(new Error('Invalid encrypted message'));
+  }
+  var salt = data.slice(0, 16);
+  var iv = data.slice(16, 28);
+  var ciphertext = data.slice(28);
+  return deriveAesKey(password, salt).then(function(key) {
+    return crypto.subtle.decrypt(
+      {name: 'AES-GCM', iv: iv},
+      key,
+      ciphertext
+    );
+  }).then(function(plaintext) {
+    return utf8Decode(new Uint8Array(plaintext));
+  });
+}
+
+function showEncryptModal() {
+  var overlay = createModalOverlay();
+  var modal = createPasswordModal('Encrypt message', overlay);
+
+  var explanation = document.createElement('p');
+  explanation.style.marginTop = '0';
+  explanation.style.marginBottom = '12px';
+  explanation.textContent = 'Enter a password to encrypt the current message.';
+  modal.appendChild(explanation);
+
+  var passwordInput = document.createElement('input');
+  passwordInput.type = 'password';
+  passwordInput.className = 'copy-input';
+  passwordInput.placeholder = 'Password';
+  modal.appendChild(passwordInput);
+
+  var rememberWrapper = document.createElement('label');
+  rememberWrapper.style.display = 'block';
+  rememberWrapper.style.marginTop = '8px';
+  rememberWrapper.style.color = 'var(--text)';
+  var rememberCheckbox = document.createElement('input');
+  rememberCheckbox.type = 'checkbox';
+  rememberCheckbox.style.marginRight = '8px';
+  rememberWrapper.appendChild(rememberCheckbox);
+  rememberWrapper.appendChild(document.createTextNode('Remember password'));
+  modal.appendChild(rememberWrapper);
+
+  var errorText = document.createElement('div');
+  errorText.style.color = '#ff6b6b';
+  errorText.style.marginTop = '8px';
+  errorText.style.display = 'none';
+  modal.appendChild(errorText);
+
+  var buttonRow = createModalButtonRow();
+  modal.appendChild(buttonRow);
+
+  var cancelBtn = createModalButton('Cancel');
+  cancelBtn.addEventListener('click', function() { closeModal(overlay); });
+  buttonRow.appendChild(cancelBtn);
+
+  var sendBtn = createModalButton('Send');
+  sendBtn.addEventListener('click', function() {
+    var password = passwordInput.value;
+    if (!password) {
+      errorText.textContent = 'Password cannot be empty.';
+      errorText.style.display = 'block';
+      passwordInput.focus();
+      return;
+    }
+    var message = chatInput.value;
+    if (!message || message.trim().length === 0) {
+      errorText.textContent = 'Message cannot be empty.';
+      errorText.style.display = 'block';
+      chatInput.focus();
+      return;
+    }
+    if (rememberCheckbox.checked) {
+      savePassword('encryptPassword', password);
+    }
+    encryptText(message, password).then(function(encoded) {
+      if (currentWebSocket) {
+        currentWebSocket.send(JSON.stringify({message: encoded}));
+      }
+      chatInput.value = '';
+      closeModal(overlay);
+    }).catch(function(err) {
+      errorText.textContent = 'Encryption failed.';
+      errorText.style.display = 'block';
+    });
+  });
+  buttonRow.appendChild(sendBtn);
+
+  getSavedPassword('encryptPassword').then(function(saved) {
+    if (saved) {
+      passwordInput.value = saved;
+      rememberCheckbox.checked = true;
+    }
+  });
+}
+
+function showDecryptModal(encodedMessage) {
+  var overlay = createModalOverlay();
+  var modal = createPasswordModal('Decrypt message', overlay);
+
+  var explanation = document.createElement('p');
+  explanation.style.marginTop = '0';
+  explanation.style.marginBottom = '12px';
+  explanation.textContent = 'Enter the password used to encrypt this message.';
+  modal.appendChild(explanation);
+
+  var passwordInput = document.createElement('input');
+  passwordInput.type = 'password';
+  passwordInput.className = 'copy-input';
+  passwordInput.placeholder = 'Password';
+  modal.appendChild(passwordInput);
+
+  var rememberWrapper = document.createElement('label');
+  rememberWrapper.style.display = 'block';
+  rememberWrapper.style.marginTop = '8px';
+  rememberWrapper.style.color = 'var(--text)';
+  var rememberCheckbox = document.createElement('input');
+  rememberCheckbox.type = 'checkbox';
+  rememberCheckbox.style.marginRight = '8px';
+  rememberWrapper.appendChild(rememberCheckbox);
+  rememberWrapper.appendChild(document.createTextNode('Remember password'));
+  modal.appendChild(rememberWrapper);
+
+  var resultBox = document.createElement('textarea');
+  resultBox.className = 'copy-input';
+  resultBox.style.minHeight = '80px';
+  resultBox.style.marginTop = '12px';
+  resultBox.style.display = 'none';
+  resultBox.readOnly = true;
+  modal.appendChild(resultBox);
+
+  var errorText = document.createElement('div');
+  errorText.style.color = '#ff6b6b';
+  errorText.style.marginTop = '8px';
+  errorText.style.display = 'none';
+  modal.appendChild(errorText);
+
+  var buttonRow = createModalButtonRow();
+  modal.appendChild(buttonRow);
+
+  var cancelBtn = createModalButton('Cancel');
+  cancelBtn.addEventListener('click', function() { closeModal(overlay); });
+  buttonRow.appendChild(cancelBtn);
+
+  var decryptBtn = createModalButton('Decrypt');
+  decryptBtn.addEventListener('click', function() {
+    var password = passwordInput.value;
+    if (!password) {
+      errorText.textContent = 'Password cannot be empty.';
+      errorText.style.display = 'block';
+      passwordInput.focus();
+      return;
+    }
+    if (rememberCheckbox.checked) {
+      savePassword('decryptPassword', password);
+    }
+    decryptText(encodedMessage, password).then(function(plaintext) {
+      resultBox.value = plaintext;
+      resultBox.style.display = 'block';
+      errorText.style.display = 'none';
+      resultBox.focus();
+      resultBox.setSelectionRange(0, resultBox.value.length);
+    }).catch(function(err) {
+      errorText.textContent = 'Decryption failed. Check password or message.';
+      errorText.style.display = 'block';
+      resultBox.style.display = 'none';
+    });
+  });
+  buttonRow.appendChild(decryptBtn);
+
+  getSavedPassword('decryptPassword').then(function(saved) {
+    if (saved) {
+      passwordInput.value = saved;
+      rememberCheckbox.checked = true;
+    }
+  });
+}
+
+function createModalOverlay() {
+  var overlay = document.createElement('div');
+  overlay.id = 'password-overlay';
+  overlay.addEventListener('click', function() { closeModal(overlay); });
+  document.body.appendChild(overlay);
+  return overlay;
+}
+
+function createPasswordModal(titleText, overlay) {
+  var modal = document.createElement('div');
+  modal.className = 'copy-modal';
+  modal.addEventListener('click', function(e) { e.stopPropagation(); });
+
+  var title = document.createElement('h2');
+  title.textContent = titleText;
+  title.style.marginTop = '0';
+  title.style.marginBottom = '12px';
+  title.style.fontSize = '1.1em';
+  title.style.color = 'var(--text)';
+  modal.appendChild(title);
+
+  var closeBtn = document.createElement('button');
+  closeBtn.type = 'button';
+  closeBtn.className = 'copy-close';
+  closeBtn.innerHTML = '✕';
+  closeBtn.addEventListener('click', function() { closeModal(overlay); });
+  modal.appendChild(closeBtn);
+
+  overlay.appendChild(modal);
+  return modal;
+}
+
+function createModalButtonRow() {
+  var row = document.createElement('div');
+  row.style.display = 'flex';
+  row.style.justifyContent = 'flex-end';
+  row.style.gap = '8px';
+  row.style.marginTop = '12px';
+  return row;
+}
+
+function createModalButton(label) {
+  var button = document.createElement('button');
+  button.type = 'button';
+  button.textContent = label;
+  button.style.border = '1px solid var(--border)';
+  button.style.background = '#0f1720';
+  button.style.color = 'var(--text)';
+  button.style.padding = '8px 12px';
+  button.style.cursor = 'pointer';
+  return button;
+}
+
+function closeModal(overlay) {
+  if (overlay && overlay.parentNode) {
+    overlay.parentNode.removeChild(overlay);
+  }
 }
 
 var lastSeenTimestamp = 0;
@@ -565,6 +954,18 @@ function addChatMessage(name, text) {
   });
 
   p.appendChild(btn);
+
+  var decryptBtn = document.createElement("button");
+  decryptBtn.type = 'button';
+  decryptBtn.className = "decrypt-btn";
+  decryptBtn.setAttribute("aria-label", "decrypt message");
+  decryptBtn.innerHTML = '<svg width="16" height="16" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg" aria-hidden="true"><path fill="currentColor" d="M17 8V7a5 5 0 0 0-10 0v1H5a2 2 0 0 0-2 2v9a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-9a2 2 0 0 0-2-2h-2zm-8-1a3 3 0 0 1 6 0v1H9V7zm10 12H5v-9h14v9z"/></svg>';
+  decryptBtn.addEventListener('click', function(e) {
+    e.preventDefault();
+    e.stopPropagation();
+    showDecryptModal(text);
+  });
+  p.appendChild(decryptBtn);
 
   // Append the new chat line, making sure that if the chatlog was scrolled to the bottom
   // before, it remains scrolled to the bottom, and otherwise the scroll position doesn't
