@@ -6,6 +6,13 @@ Try it here: https://edge-chat-demo.cloudflareworkers.com
 
 The reason this demo is remarkable is because it deals with state. Before Durable Objects, Workers were stateless, and state had to be stored elsewhere. State can mean storage, but it also means the ability to coordinate. In a chat room, when one user sends a message, the app must somehow route that message to other users, via connections that those other users already had open. These connections are state, and coordinating them in a stateless framework is hard if not impossible.
 
+## What I changed?
+
+- make it more modern
+- add encryption
+- dark mode
+** I used AI agent to develop this **
+
 ## How does it work?
 
 This chat app uses a Durable Object to control each chat room. Users connect to the object using WebSockets. Messages from one user are broadcast to all the other users. The chat history is also stored in durable storage, but this is only for history. Real-time messages are relayed directly from one user to others without going through the storage layer.
